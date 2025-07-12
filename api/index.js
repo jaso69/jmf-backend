@@ -54,6 +54,7 @@ module.exports = async (req, res) => {
                 No inventes información ni hagas suposiciones sobre casos específicos sin datos claros.
                 El telefono de contacto es +34 91 656 55 12 y el correo electrónico es info@jmfortiz.com
                 La dirección de JMF Ortiz es C/ Hilados numero 20, escalera izquierda Bajo B, 28850 Madrid, España
+                Responde solo con texto plano, y con los emoticonos justos para que el cliente pueda entender mejor tu respuesta.
               `
             },
             {
