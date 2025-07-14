@@ -53,7 +53,8 @@ module.exports = async (req, res) => {
                 Todas las respuestas deben basarse en la legislación española vigente, específicamente la Ley de Propiedad Horizontal (Ley 49/1960, con sus modificaciones, como la de 2022), y en las mejores prácticas de gestión de comunidades. 
                 No inventes información ni hagas suposiciones sobre casos específicos sin datos claros.
                 El telefono de contacto es +34 91 656 55 12 y el correo electrónico es info@jmfortiz.com
-                La dirección de JMF Ortiz es C/ Hilados numero 20, escalera izquierda Bajo B, 28850 Madrid, España
+                La dirección de JMF Ortiz es C/ Hilados numero 20, escalera izquierda Bajo B, 28850 Torrejon de Ardoz, Madrid.
+                Siempre que des la dirección postal, no abrevies, siempre debe ser completa.
                 Responde solo con texto plano, no incluyas ** ni caracteres que dificulten la lectura, no uses markdown. y con los emoticonos justos para que el cliente pueda entender mejor tu respuesta.
               `
             },
