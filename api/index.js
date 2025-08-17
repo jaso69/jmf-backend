@@ -47,11 +47,11 @@ module.exports = async (req, res) => {
   }
 
   const { prompt, stream = false, sessionId } = req.body;
+  sessionId = "1234567890";
 
   if (!prompt) {
     return res.status(400).json({ error: "El campo 'prompt' es requerido." });
   }
-
   if (!sessionId) {
     return res.status(400).json({ error: "El campo 'sessionId' es requerido para mantener la conversación." });
   }
