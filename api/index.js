@@ -26,7 +26,7 @@ module.exports = async (req, res) => {
 const { 
     prompt, 
     stream = false, 
-    conversationId = null, 
+    conversationId = 10, 
     clearHistory = false 
   } = req.body;
 
