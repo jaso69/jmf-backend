@@ -2,11 +2,6 @@ const axios = require('axios');
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 
-// Inicializar almacenamiento global de sesiones (persistirá entre invocaciones mientras Vercel no reinicie)
-if (!global.chatSessions) {
-  global.chatSessions = {};
-}
-
 module.exports = async (req, res) => {
   // Configurar encabezados CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -25,26 +20,16 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: 'DEEPSEEK_API_KEY no está definida' });
   }
 
-  const { prompt, stream = false, sessionId = "default-session" } = req.body;
+  const { prompt, stream = false } = req.body;
 
   if (!prompt) {
     return res.status(400).json({ error: "El campo 'prompt' es requerido." });
   }
 
   try {
-    // Recuperar historial de la sesión
-    let conversationHistory = global.chatSessions[sessionId] || [];
-
-    // Añadir nuevo mensaje del usuario
-    conversationHistory.push({ role: "user", content: prompt });
-
-    // Limitar historial a últimos 10 mensajes
-    if (conversationHistory.length > 10) {
-      conversationHistory = conversationHistory.slice(-10);
-    }
-
     // Configuración para streaming
     if (stream) {
+      // Configuramos los headers para streaming
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
@@ -73,54 +58,30 @@ module.exports = async (req, res) => {
                 Responde solo con texto plano, no incluyas ** ni caracteres que dificulten la lectura, no uses markdown. y con los emoticonos justos para que el cliente pueda entender mejor tu respuesta.
               `
             },
-            ...conversationHistory
+            {
+              role: "user",
+              content: prompt
+            }
           ],
           temperature: 0.3,
-          stream: true
+          stream: true // Habilitamos streaming en la API
         },
         {
           headers: {
             Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
             'Content-Type': 'application/json',
           },
-          responseType: 'stream'
+          responseType: 'stream' // Importante para manejar la respuesta como stream
         }
       );
 
-      let assistantResponse = "";
-
-      response.data.on("data", (chunk) => {
-        const lines = chunk.toString().split("\n").filter(line => line.startsWith("data: "));
-        for (const line of lines) {
-          const data = line.replace("data: ", "");
-          if (data === "[DONE]") {
-            // Guardamos la respuesta en historial
-            conversationHistory.push({ role: "assistant", content: assistantResponse });
-            global.chatSessions[sessionId] = conversationHistory;
-            res.end();
-            return;
-          }
-          try {
-            const parsed = JSON.parse(data);
-            const content = parsed.choices[0].delta.content || "";
-            assistantResponse += content;
-            res.write(`data: ${JSON.stringify({ content })}\n\n`);
-          } catch (e) {
-            // Ignorar errores de parseo
-          }
-        }
-      });
-
-      response.data.on("error", (error) => {
-        console.error("Error en stream:", error);
-        res.write(`data: ${JSON.stringify({ error: "Error en stream" })}\n\n`);
-        res.end();
-      });
+      // Pipe la respuesta de DeepSeek directamente al cliente
+      response.data.pipe(res);
 
       return;
     }
 
-    // Respuesta no streaming
+    // Código original para respuestas no streaming
     const response = await axios.post(
       'https://api.deepseek.com/v1/chat/completions',
       {
@@ -129,13 +90,15 @@ module.exports = async (req, res) => {
           {
             role: "system",
             content: `
-              Eres un asistente virtual de JMF Ortiz, con más de 40 años de experiencia en la gestión de comunidades.
-              Responde en base a la Ley de Propiedad Horizontal en España y mejores prácticas, de forma clara y profesional.
+              para un chatbot con gpt-4 cuantas preguntas y respuestas puede responder con 10€
             `
           },
-          ...conversationHistory
+          {
+            role: "user",
+            content: prompt
+          }
         ],
-        temperature: 0.3,
+        temperature: 0.7,
       },
       {
         headers: {
@@ -145,13 +108,7 @@ module.exports = async (req, res) => {
       }
     );
 
-    const assistantResponse = response.data.choices[0].message.content;
-
-    // Actualizar historial
-    conversationHistory.push({ role: "assistant", content: assistantResponse });
-    global.chatSessions[sessionId] = conversationHistory;
-
-    res.status(200).json({ content: assistantResponse });
+    res.status(200).json(response.data);
   } catch (error) {
     console.error('Error al llamar a DeepSeek:', error.response?.data || error.message);
     res.status(500).json({
