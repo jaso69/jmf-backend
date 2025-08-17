@@ -46,8 +46,8 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: 'DEEPSEEK_API_KEY no está definida' });
   }
 
-  const { prompt, stream = false, sessionId } = req.body;
-  sessionId = "1234567890";
+  const { prompt} = req.body;
+  const sessionId = "1234567890";
 
   if (!prompt) {
     return res.status(400).json({ error: "El campo 'prompt' es requerido." });
