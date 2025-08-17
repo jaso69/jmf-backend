@@ -47,6 +47,9 @@ const {
       currentConversationId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
     }
 
+    if (conversationMessages.length > 10) {
+      conversationMessages = []
+    }
     // Limpiar historial si se solicita
     if (clearHistory) {
       conversationMessages = [];
