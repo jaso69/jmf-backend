@@ -71,12 +71,7 @@ const {
         'https://api.deepseek.com/v1/chat/completions',
         {
           model: "deepseek-chat",
-          messages: [
-            {
-              role: "system",
-              content: conversationMessages
-            },
-          ],
+          messages: conversationMessages,
           temperature: 0.3,
           stream: true
         },
