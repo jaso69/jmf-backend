@@ -84,55 +84,62 @@ const {
         }
       );
 
-      let assistantResponse = "";
-
-      response.data.on("data", (chunk) => {
-        const lines = chunk.toString().split("\n").filter(line => line.startsWith("data: "));
+      let assistantResponse = '';
+      
+      // Interceptar el stream para capturar la respuesta completa
+      response.data.on('data', (chunk) => {
+        const chunkStr = chunk.toString();
+        const lines = chunkStr.split('\n');
+        
         for (const line of lines) {
-          const data = line.replace("data: ", "");
-          if (data === "[DONE]") {
-            // Guardamos la respuesta en historial
-            conversationMessages.push({ role: "assistant", content: assistantResponse });
-            global.chatSessions[sessionId] = conversationMessages;
-            res.end();
-            return;
-          }
-          try {
-            const parsed = JSON.parse(data);
-            const content = parsed.choices[0].delta.content || "";
-            assistantResponse += content;
-            res.write(`data: ${JSON.stringify({ content })}\n\n`);
-          } catch (e) {
-            // Ignorar errores de parseo
+          if (line.startsWith('data:') && line !== 'data: [DONE]') {
+            try {
+              const data = JSON.parse(line.substring(5));
+              if (data.choices && data.choices[0].delta && data.choices[0].delta.content) {
+                assistantResponse += data.choices[0].delta.content;
+              }
+            } catch (e) {
+              // Ignorar errores de parsing
+            }
           }
         }
+        
+        // Enviar el chunk al cliente
+        res.write(chunk);
       });
 
-      response.data.on("error", (error) => {
-        console.error("Error en stream:", error);
-        res.write(`data: ${JSON.stringify({ error: "Error en stream" })}\n\n`);
+      response.data.on('end', () => {
+        // Guardar la respuesta completa del asistente en el historial
+        if (assistantResponse) {
+          conversationMessages.push({
+            role: "assistant",
+            content: assistantResponse
+          });
+          
+          // Guardar la conversación actualizada
+          conversations.set(currentConversationId, conversationMessages);
+        }
+        
+        // Enviar el ID de conversación al final del stream
+        res.write(`data: {"conversationId": "${currentConversationId}"}\n\n`);
+        res.end();
+      });
+
+      response.data.on('error', (error) => {
+        console.error('Error en stream:', error);
         res.end();
       });
 
       return;
     }
 
-    // Respuesta no streaming
+    // Código para respuestas no streaming
     const response = await axios.post(
       'https://api.deepseek.com/v1/chat/completions',
       {
         model: "deepseek-chat",
-        messages: [
-          {
-            role: "system",
-            content: `
-              Eres un asistente virtual de JMF Ortiz, con más de 40 años de experiencia en la gestión de comunidades.
-              Responde en base a la Ley de Propiedad Horizontal en España y mejores prácticas, de forma clara y profesional.
-            `
-          },
-          ...conversationMessages
-        ],
-        temperature: 0.3,
+        messages: conversationMessages,
+        temperature: 0.7,
       },
       {
         headers: {
@@ -142,13 +149,25 @@ const {
       }
     );
 
-    const assistantResponse = response.data.choices[0].message.content;
+    // Agregar la respuesta del asistente al historial
+    if (response.data.choices && response.data.choices[0].message) {
+      conversationMessages.push({
+        role: "assistant",
+        content: response.data.choices[0].message.content
+      });
+    }
 
-    // Actualizar historial
-    conversationMessages.push({ role: "assistant", content: assistantResponse });
-    global.chatSessions[sessionId] = conversationMessages;
+    // Guardar la conversación actualizada
+    conversations.set(currentConversationId, conversationMessages);
 
-    res.status(200).json({ content: assistantResponse });
+    // Agregar el ID de conversación a la respuesta
+    const responseData = {
+      ...response.data,
+      conversationId: currentConversationId,
+      messageCount: conversationMessages.length
+    };
+
+    res.status(200).json(responseData);
   } catch (error) {
     console.error('Error al llamar a DeepSeek:', error.response?.data || error.message);
     res.status(500).json({
@@ -157,3 +176,19 @@ const {
     });
   }
 };
+
+// Función para limpiar conversaciones antiguas (opcional)
+const cleanupOldConversations = () => {
+  const now = Date.now();
+  const maxAge = 24 * 60 * 60 * 1000; // 24 horas
+  
+  for (const [id, messages] of conversations.entries()) {
+    const conversationAge = now - parseInt(id.split('.')[0]);
+    if (conversationAge > maxAge) {
+      conversations.delete(id);
+    }
+  }
+};
+
+// Limpiar conversaciones cada hora
+setInterval(cleanupOldConversations, 60 * 60 * 1000);
