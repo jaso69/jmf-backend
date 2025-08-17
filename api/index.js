@@ -3,9 +3,7 @@ const axios = require('axios');
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 
 // Inicializar almacenamiento global de sesiones (persistirá entre invocaciones mientras Vercel no reinicie)
-if (!global.chatSessions) {
-  global.chatSessions = {};
-}
+const conversations = new Map();
 
 module.exports = async (req, res) => {
   // Configurar encabezados CORS
@@ -25,24 +23,40 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: 'DEEPSEEK_API_KEY no está definida' });
   }
 
-  const { prompt, stream = false, sessionId = "default-session" } = req.body;
+const { 
+    prompt, 
+    stream = false, 
+    conversationId = null, 
+    clearHistory = false 
+  } = req.body;
 
   if (!prompt) {
     return res.status(400).json({ error: "El campo 'prompt' es requerido." });
   }
 
   try {
-    // Recuperar historial de la sesión
-    let conversationHistory = global.chatSessions[sessionId] || [];
 
-    // Añadir nuevo mensaje del usuario
-    conversationHistory.push({ role: "user", content: prompt });
+    let conversationMessages = [];
+    let currentConversationId = conversationId;
 
-    // Limitar historial a últimos 10 mensajes
-    if (conversationHistory.length > 10) {
-      conversationHistory = conversationHistory.slice(-10);
+    // Si se proporciona un ID de conversación, recuperar el historial
+    if (currentConversationId && conversations.has(currentConversationId)) {
+      conversationMessages = conversations.get(currentConversationId);
+    } else if (!currentConversationId) {
+      // Generar un nuevo ID de conversación
+      currentConversationId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
     }
 
+    // Limpiar historial si se solicita
+    if (clearHistory) {
+      conversationMessages = [];
+    }
+
+    // Agregar el mensaje del usuario al historial
+    conversationMessages.push({
+      role: "user",
+      content: prompt
+    });
     // Configuración para streaming
     if (stream) {
       res.setHeader('Content-Type', 'text/event-stream');
@@ -73,7 +87,7 @@ module.exports = async (req, res) => {
                 Responde solo con texto plano, no incluyas ** ni caracteres que dificulten la lectura, no uses markdown. y con los emoticonos justos para que el cliente pueda entender mejor tu respuesta.
               `
             },
-            ...conversationHistory
+            ...conversationMessages
           ],
           temperature: 0.3,
           stream: true
@@ -95,8 +109,8 @@ module.exports = async (req, res) => {
           const data = line.replace("data: ", "");
           if (data === "[DONE]") {
             // Guardamos la respuesta en historial
-            conversationHistory.push({ role: "assistant", content: assistantResponse });
-            global.chatSessions[sessionId] = conversationHistory;
+            conversationMessages.push({ role: "assistant", content: assistantResponse });
+            global.chatSessions[sessionId] = conversationMessages;
             res.end();
             return;
           }
@@ -133,7 +147,7 @@ module.exports = async (req, res) => {
               Responde en base a la Ley de Propiedad Horizontal en España y mejores prácticas, de forma clara y profesional.
             `
           },
-          ...conversationHistory
+          ...conversationMessages
         ],
         temperature: 0.3,
       },
@@ -148,8 +162,8 @@ module.exports = async (req, res) => {
     const assistantResponse = response.data.choices[0].message.content;
 
     // Actualizar historial
-    conversationHistory.push({ role: "assistant", content: assistantResponse });
-    global.chatSessions[sessionId] = conversationHistory;
+    conversationMessages.push({ role: "assistant", content: assistantResponse });
+    global.chatSessions[sessionId] = conversationMessages;
 
     res.status(200).json({ content: assistantResponse });
   } catch (error) {
