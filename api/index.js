@@ -69,6 +69,11 @@ module.exports = async (req, res) => {
 
     // Configuración para streaming
     if (stream) {
+      // Repetimos CORS para que también se aplique en SSE
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
